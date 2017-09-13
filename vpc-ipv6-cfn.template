@@ -1,0 +1,75 @@
+# vim: ft=yaml
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+    Template to create a custom resource that can be used to complete missing functions
+    of CloudFormation for VPCs with IPv6. Will export a ServiceToken to
+    vpc-ipv6-cfn-servicetoken by default.
+
+
+Resources:
+    vpcipv6cfnrole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                  - Effect: Allow
+                    Action:
+                      - sts:AssumeRole
+                    Principal:
+                        Service:
+                          - lambda.amazonaws.com
+
+    vpcipv6cfnpolicy:
+        Type: AWS::IAM::Policy
+        Properties:
+            Roles: 
+              - !Ref vpcipv6cfnrole
+            PolicyName: AccessVPCandELBv2Permissions
+            PolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                  - Action:
+                      - logs:CreateLogGroup
+                      - logs:CreateLogStream
+                      - logs:PutLogEvents
+                    Effect: Allow
+                    Resource: "arn:aws:logs:*:*:*"
+                  - Action:
+                      - ec2:DescribeInstances
+                      - ec2:DescribeVpcs
+                      - ec2:ModifySubnetAttribute
+                      - ec2:DeleteEgressOnlyInternetGateway
+                      - ec2:CreateEgressOnlyInternetGateway
+                      - ec2:DescribeEgressOnlyInternetGateways
+                      - ec2:DeleteRoute
+                      - ec2:CreateRoute
+                    Effect: Allow
+                    Resource: "*"
+                  - Action:
+                      - elasticloadbalancing:*
+                    Effect: Allow
+                    Resource: "*"
+
+
+    vpcipv6cfnfunction:
+        Type: AWS::Lambda::Function
+        DependsOn: vpcipv6cfnpolicy
+        Properties:
+            Runtime: python3.6
+            Code: src/
+            Description: >
+                Custom Resource Provider for missing functions of CloudFormation
+                for VPCs with IPv6
+            Handler: service.vpc_ipv6_cfn
+            MemorySize: 256
+            Role: !GetAtt [vpcipv6cfnrole, Arn]
+            Timeout: 300
+
+Outputs:
+    ServiceTokenOutput:
+        Description: ServiceToken of the LambdaFunction that handles the Custom Resources
+        Value: !GetAtt [vpcipv6cfnfunction, Arn]
+        Export:
+            Name: !Sub vpc-ipv6-cfn-${AWS::Region}

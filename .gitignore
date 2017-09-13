@@ -1,0 +1,5 @@
+.*.swp
+.DS_Store
+src/__pycache__/*
+src/accustom*
+.idea
